@@ -7,24 +7,19 @@ pipeline {
   // }
   agent any
   environment {
-      MIGRATE_ENV = 'nonprod-pipeline'
+      ENV = 'dev'
       BRANCH_NAME = "${env.BRANCH_NAME}"
   }
   stages {
-    stage('Setup') {
-      steps {
-        sh 'sudo apt-get install jq'
-      }
-    }
     stage('Build') {
       steps {
-          sh './bin/migrate'
+          sh './build.sh'
       }
     }
     stage('Run integration tests') {
       steps {
         sh '''
-          source "env/${MIGRATE_ENV}.sh"
+          source "env/${ENV}.sh"
           
           docker-compose run \
             -e ENV=${MIGRATE_ENV} \
