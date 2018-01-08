@@ -68,5 +68,50 @@ You can build & run the Spring Boot app with the Gradle image directly, with thi
 docker run --rm -v $(pwd):/home/gradle/project -w /home/gradle/project registry.hub.docker.com/library/gradle:4.2-jdk8-alpine gradle build && java -jar build/libs/hello-spring-boot-0.0.1.jar
 ```
 
+## Jenkins Multistage Pipeline information
 
+### Summary
 
+- The pipeline is called `vis-case-processing-etl` on VDM Jenkinks - you can search for on the desired environments.
+- Pipeline config stored in project repo - `Jenkinsfile`
+- Builds each branch on check-in
+- Each branch has its own environment including schemas
+- Pipeline is running job in a container
+
+### Each push triggers a build
+
+    - Branch builds are added/deleted when a branch is added/deleted to GitHub (polls every minute)
+    - Time your pushes!
+    - You get your own schema - one for each branch. It is removed when the job completes. Master's schema is not deleted so it can be inspected (its schemas are prefixed with master_).
+    - Possible to filter by branch namme wildcards, i.e. only build *-feature
+
+### Config
+
+    - Polls for new/removed branches, and branch changes every 1 min (setting)
+    - Polling happens at multibranch job level
+    - Builds changed branches, adds new ones, deletes removed ones
+    - Can push several times without triggering build if before the minute is up
+
+### Tech specs
+
+    - Jenkinsfile
+        - Provides MIGRATE_ENV and schema name with branch name prefixed
+        - Steps:
+            - Main job: uses Docker to run /bin scripts
+            - Tests: uses a Gradle image to run tests via bin/tests (uses test image - Gradle base)
+    - Runs in a Jenkins Multibranch Pipeline job
+        - Jenkins job generation
+            - /pipeline/jobs/jobsdsl.groovy
+            - Configures multibranch pipeline
+            - USCIS Jenkins generator points to it`
+            - Multibranch SCM polling
+
+## Running Jenkins locally
+
+You can use the provided Jenkins image with the needed plug-ins dependencies installed, to run Jenkins locally to develop pipelines without relying on the remote Jenkins.
+
+To build and run the Jenkins container:
+
+1. Run `docker-compose -f containers/jenkins/docker-compose.yml up -d --build`
+
+1. View the output with `docker logs <CONTAINER>`, and get the access code in the console output, and put that into localhost:8080 to log in.
