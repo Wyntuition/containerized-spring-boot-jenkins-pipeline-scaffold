@@ -1,49 +1,69 @@
-# https://github.com/jareddlc/jenkins-with-docker-socket/blob/master/Dockerfile
-
 FROM jenkins/jenkins:alpine
 
-MAINTAINER Jared De La Cruz <jared@jareddlc.com>
+USER root
+RUN   apk update \
+      && apk add sudo \
+      && apk add curl \
+      && apk add nodejs \
+      && apk add ruby \
+      && apk add go \
+      && rm -rf /var/lib/apt/lists/*
 
-ARG USER_JENKINS=jenkins
-ARG USER_ROOT=root
-ARG GROUP_DOCKER=docker
-ARG GROUP_DOCKER_GID=1001
+RUN echo "jenkins ALL=NOPASSWD: ALL" >> /etc/sudoers
 
-# Switch to root
-USER ${USER_ROOT}
+# Getting the docker-cli
+# --- Attention: docker.sock needs to be mounted as volume in docker-compose.yml
+# see: https://issues.jenkins-ci.org/browse/JENKINS-35025
+# see: https://get.docker.com/builds/
+# see: https://wiki.jenkins-ci.org/display/JENKINS/CloudBees+Docker+Custom+Build+Environment+Plugin#CloudBeesDockerCustomBuildEnvironmentPlugin-DockerinDocker
+RUN curl -sSL -O https://get.docker.com/builds/Linux/x86_64/docker-latest.tgz && tar -xvzf docker-latest.tgz
+RUN mv docker/* /usr/bin/
 
-# Create docker group and add user jenkins to the group
-RUN addgroup -g ${GROUP_DOCKER_GID} ${GROUP_DOCKER} \
-	&& addgroup ${USER_JENKINS} ${GROUP_DOCKER}
+RUN set -ex \
+      && apk update \
+      && apk add --no-cache \
+        jq \
+        python \
+        py-pip \
+        ruby ruby-bigdecimal ruby-bundler \
+        ca-certificates libressl \
+        libressl-dev build-base ruby-dev \
+        postgresql-client && rm -rf /var/cache/apk/* \
+      && pip install docker-compose==1.17.1 \
+      && gem install --no-ri --no-rdoc \
+        json \
+        keystore
 
-# Install docker
-# From https://github.com/docker-library/docker/blob/5a539ed6ab5d91c5d8ccf0ccbc583500740199a2/17.09/Dockerfile
+# Put jenkins into the root group so it can run Docker. Ok since this is run locally, but other ways like giving the jenkins group permission could be explored.
+# TODO: disabling as didn't have perms to mount docker.sock
+#USER jenkins:root
 
-ENV DOCKER_CHANNEL stable
-ENV DOCKER_BUCKET download.docker.com
-ENV DOCKER_VERSION 17.09.0-ce
-ENV DOCKER_ARCH x86_64
-ENV DOCKER_SHA256 a9e90a73c3cdfbf238f148e1ec0eaff5eb181f92f35bdd938fd7dab18e1c4647
+# installing specific list of plugins. see: https://github.com/jenkinsci/docker#preinstalling-plugins
+COPY jenkins_home/plugins.txt /var/jenkins_home/plugins.txt
+RUN /usr/local/bin/install-plugins.sh < /var/jenkins_home/plugins.txt
 
-RUN set -ex; \
-	apk add --no-cache sudo; \
-	apk add --no-cache --virtual .fetch-deps \
-		curl \
-		tar \
-	&& curl -fSL -o docker.tgz "https://${DOCKER_BUCKET}/linux/static/${DOCKER_CHANNEL}/${DOCKER_ARCH}/docker-${DOCKER_VERSION}.tgz" \
-	&& echo "${DOCKER_SHA256} *docker.tgz" | sha256sum -c - \
-	&& tar --extract --file docker.tgz --strip-components 1 --directory /usr/local/bin/ \
-	&& rm docker.tgz \
-	&& apk del .fetch-deps \
-	&& dockerd -v \
-	&& docker -v
+# Adding default Jenkins Jobs
+#COPY jobs/1-docker-test-job.xml /usr/share/jenkins/ref/jobs/docker-test-job/config.xml
 
-# Add user jenkins to list of sudoers
-RUN echo "jenkins ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+#copy over the job script this works better if it is in git
+#COPY seedjobs/dockerTestJob.groovy /var/jenkins_home/seedjobs/dockerTestJob.groovy
 
-# Switch to user jenkins
-USER ${USER_JENKINS}
+############################################
+# Configure Jenkins
+############################################
+# Jenkins settings
+#COPY config/config.xml /usr/share/jenkins/ref/config.xml
 
-COPY docker-socket.sh /
+# Jenkins Settings, i.e. Maven, Groovy, ...
+#COPY config/hudson.tasks.Maven.xml /usr/share/jenkins/ref/hudson.tasks.Maven.xml
+#COPY config/hudson.plugins.groovy.Groovy.xml /usr/share/jenkins/ref/hudson.plugins.groovy.Groovy.xml
+#COPY config/maven-global-settings-files.xml /usr/share/jenkins/ref/maven-global-settings-files.xml
 
-ENTRYPOINT ["/docker-socket.sh"]
+# SSH Keys & Credentials
+#COPY config/credentials.xml /usr/share/jenkins/ref/credentials.xml
+#COPY config/ssh-keys/cd-demo /usr/share/jenkins/ref/.ssh/id_rsa
+#COPY config/ssh-keys/cd-demo.pub /usr/share/jenkins/ref/.ssh/id_rsa.pub
+
+# tell Jenkins that no banner prompt for pipeline plugins is needed
+# see: https://github.com/jenkinsci/docker#preinstalling-plugins
+RUN echo 2.0 > /usr/share/jenkins/ref/jenkins.install.UpgradeWizard.state

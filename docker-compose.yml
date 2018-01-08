@@ -3,7 +3,7 @@ services:
   java_app:
     build: 
       context: .
-      dockerfile: containers/Dockerfile
+      dockerfile: containers/app/Dockerfile
     container_name: jenkins-pipeline-springboot-scaffold
     ports:
       - "9090:8080"
