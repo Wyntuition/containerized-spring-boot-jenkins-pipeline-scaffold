@@ -67,3 +67,6 @@ You can build & run the Spring Boot app with the Gradle image directly, with thi
 ```bash
 docker run --rm -v $(pwd):/home/gradle/project -w /home/gradle/project registry.hub.docker.com/library/gradle:4.2-jdk8-alpine gradle build && java -jar build/libs/hello-spring-boot-0.0.1.jar
 ```
+
+
+
