@@ -12,10 +12,7 @@ RUN   apk update \
 RUN echo "jenkins ALL=NOPASSWD: ALL" >> /etc/sudoers
 
 # Getting the docker-cli
-# --- Attention: docker.sock needs to be mounted as volume in docker-compose.yml
-# see: https://issues.jenkins-ci.org/browse/JENKINS-35025
-# see: https://get.docker.com/builds/
-# see: https://wiki.jenkins-ci.org/display/JENKINS/CloudBees+Docker+Custom+Build+Environment+Plugin#CloudBeesDockerCustomBuildEnvironmentPlugin-DockerinDocker
+# NOTE: docker.sock needs to be mounted as volume in docker-compose.yml
 RUN curl -sSL -O https://get.docker.com/builds/Linux/x86_64/docker-latest.tgz && tar -xvzf docker-latest.tgz
 RUN mv docker/* /usr/bin/
 
@@ -38,26 +35,22 @@ RUN set -ex \
 # TODO: disabling as didn't have perms to mount docker.sock
 #USER jenkins:root
 
+############################################
+# Configure Jenkins
+############################################
+
+# Jenkins settings
+#COPY config/config.xml /usr/share/jenkins/ref/config.xml
+
 # installing specific list of plugins. see: https://github.com/jenkinsci/docker#preinstalling-plugins
 COPY jenkins_home/plugins.txt /var/jenkins_home/plugins.txt
 RUN /usr/local/bin/install-plugins.sh < /var/jenkins_home/plugins.txt
 
-# Adding default Jenkins Jobs
-#COPY jobs/1-docker-test-job.xml /usr/share/jenkins/ref/jobs/docker-test-job/config.xml
+# Adding jobs
+COPY jenkins_home/jobs/ /usr/share/jenkins/ref/jobs
 
 #copy over the job script this works better if it is in git
 #COPY seedjobs/dockerTestJob.groovy /var/jenkins_home/seedjobs/dockerTestJob.groovy
-
-############################################
-# Configure Jenkins
-############################################
-# Jenkins settings
-#COPY config/config.xml /usr/share/jenkins/ref/config.xml
-
-# Jenkins Settings, i.e. Maven, Groovy, ...
-#COPY config/hudson.tasks.Maven.xml /usr/share/jenkins/ref/hudson.tasks.Maven.xml
-#COPY config/hudson.plugins.groovy.Groovy.xml /usr/share/jenkins/ref/hudson.plugins.groovy.Groovy.xml
-#COPY config/maven-global-settings-files.xml /usr/share/jenkins/ref/maven-global-settings-files.xml
 
 # SSH Keys & Credentials
 #COPY config/credentials.xml /usr/share/jenkins/ref/credentials.xml
