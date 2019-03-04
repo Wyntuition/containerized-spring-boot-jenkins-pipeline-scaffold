@@ -1,29 +1,31 @@
-FROM gradle:4.1
-WORKDIR /project
-COPY . ./
+FROM gradle:5.2-jdk as TEMP_BUILD_IMAGE
+
+ENV GRADLE_HOME /opt/gradle-4.10.2
+ENV PATH $PATH:/opt/gradle-4.10.2/bin
+
+ENV APP_HOME=/usr/app/
+WORKDIR $APP_HOME
+
 USER root
-RUN gradle build
+RUN apt-get update && apt-get install -y maven
+
+COPY build.gradle settings.gradle gradlew $APP_HOME
+COPY gradle $APP_HOME/gradle
+## download dependencies
+COPY . .
+RUN \
+    chmod +x containers/build.sh \
+    containers/build.sh
 USER nobody
 
-FROM java:8
 
-RUN apt-get update \
-  && apt-get -y upgrade \
-  && apt-get install -y ruby-dev ruby \
-  && gem install aws-sdk --version 2.3.2 --no-ri --no-rdoc \
-  && gem install english --no-ri --no-rdoc
 
-RUN mkdir -p /opt/app \
-  && chown nobody /opt/app
+FROM openjdk:11.0.2-jdk-stretch
 
-EXPOSE 9090
+ARG ARTIFACT_NAME=myapp.jar
+ARG APP_HOME=/usr/app/
+WORKDIR $APP_HOME
 
-USER nobody
+COPY --from=TEMP_BUILD_IMAGE $APP_HOME/build/libs/myapp-0.1.0.jar ./$ARTIFACT_NAME
 
-# Copy application binary to container
-COPY --from=0 /project/build/libs/hello-spring-boot-*.jar \
-  /opt/app/hello-spring-boot.jar
-
-#CMD ["/opt/server-run.sh"]
-ENV JAVA_OPTS=""
-ENTRYPOINT exec java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar opt/app/hello-spring-boot.jar
+ENTRYPOINT ["java","-jar","/usr/app/myapp.jar"]
